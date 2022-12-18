@@ -1,5 +1,20 @@
 use rand::Rng;
 
+pub struct MapState {
+    pub map: Map,
+    pub map_size: (i16, i16),
+}
+
+impl MapState {
+    pub fn new(height: i16, width: i16) -> Result<MapState, String> {
+        let map = Map::generate((height, width))?;
+        Ok(MapState {
+            map,
+            map_size: (height, width),
+        })
+    }
+}
+
 pub struct Map {
     pub tiles: Vec<Vec<Hex>>,
 }
@@ -23,8 +38,10 @@ pub enum HexType {
 }
 
 impl Map {
-    pub fn generate(height: i16, width: i16) -> Result<Map, String> {
+    pub fn generate(dimensions: (i16, i16)) -> Result<Map, String> {
+        let (height, width) = dimensions;
         if height % 2 != 0 || width % 2 != 0 || height < 2 || width < 2 {
+            // With uneven numbers the map cannot be tiled infinitely without gaps
             return Err(String::from("Map dimensions must be even positive numbers"));
         }
 
@@ -46,8 +63,8 @@ impl Map {
     fn populate_randomly(mut self) -> Map {
         let mut rng = rand::thread_rng();
 
-        for (y, row) in self.tiles.iter_mut().enumerate() {
-            for (x, hex) in row.iter_mut().enumerate() {
+        for (_y, row) in self.tiles.iter_mut().enumerate() {
+            for (_x, hex) in row.iter_mut().enumerate() {
                 *hex = Hex {
                     hex_type: if rng.gen_range(0..100) > 50 {
                         HexType::Water

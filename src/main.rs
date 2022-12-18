@@ -1,10 +1,12 @@
 mod map;
 mod renderer;
+mod viewport;
 
 #[macro_use]
 extern crate lazy_static;
 
-use crate::map::{Hex, HexType, Map};
+use crate::map::{Hex, HexType, Map, MapState};
+use crate::viewport::ViewPortState;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -14,21 +16,28 @@ use sdl2::EventPump;
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
 const WINDOW_TITLE: &str = "PF2e Terrain Generator";
-const HEX_SIZE: i16 = 20;
+
+struct AppState {
+    pub viewport_state: ViewPortState,
+    pub map_state: MapState,
+}
 
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
 
     // TODO: Make it possible to generate a new map without restarting the app
-    // TODO: h&w must be even to for seamless looping
     // TODO: Generation in separate thread (with RWMutex) so that we can already render the partial map
     //  and see updates
     // TODO: Maybe intentionally slow down generation then to be able to see the steps properly
     // TODO: Infinite Scrolling/Wrap-around effect
-    let map = Map::generate(10, 10)?;
+    // TODO: Zoom to MousePos?
+    let mut app_state = AppState {
+        map_state: MapState::new(10, 10)?,
+        viewport_state: ViewPortState::new(),
+    };
 
     loop {
-        let quit = handle_events(&mut event_pump);
+        let quit = handle_events(&mut event_pump, &mut app_state)?;
         if quit {
             break;
         }
@@ -37,17 +46,17 @@ fn main() -> Result<(), String> {
         canvas.set_draw_color(Color::RGB(50, 50, 50));
         canvas.clear();
 
-        for (y, row) in map.tiles.iter().enumerate() {
+        for (y, row) in app_state.map_state.map.tiles.iter().enumerate() {
             for (x, hex) in row.iter().enumerate() {
                 renderer::render_hex_indexed(
                     &canvas,
+                    app_state.viewport_state.offset,
                     (x as i16, y as i16),
-                    HEX_SIZE,
+                    app_state.viewport_state.zoom_level,
                     color_for_hex(hex),
                 )?;
             }
         }
-
         canvas.present();
     }
 
@@ -62,7 +71,7 @@ fn color_for_hex(hex: &Hex) -> Color {
     }
 }
 
-fn handle_events(event_pump: &mut EventPump) -> bool {
+fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result<bool, String> {
     for event in event_pump.poll_iter() {
         match event {
             Event::Quit { .. }
@@ -70,12 +79,20 @@ fn handle_events(event_pump: &mut EventPump) -> bool {
                 keycode: Some(Keycode::Escape),
                 ..
             } => {
-                return true;
+                return Ok(true);
             }
-            _ => {}
+            Event::KeyDown {
+                keycode: Some(Keycode::R),
+                ..
+            } => {
+                app_state.map_state.map = Map::generate(app_state.map_state.map_size)?;
+            }
+            _ => {
+                app_state.viewport_state.handle_events(event);
+            }
         }
     }
-    return false;
+    return Ok(false);
 }
 
 fn show_window() -> Result<(EventPump, WindowCanvas), String> {

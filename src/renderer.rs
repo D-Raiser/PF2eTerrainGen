@@ -9,6 +9,7 @@ lazy_static! {
 
 pub fn render_hex_indexed(
     canvas: &WindowCanvas,
+    offset: (i16, i16),
     index: (i16, i16),
     // the distance from the middle point to a corner of the hex
     radius: i16,
@@ -24,10 +25,11 @@ pub fn render_hex_indexed(
     let r_half = y_radius / 2f32;
 
     // every 2nd row needs to be shifted by half a hex for a continuous pattern
-    let x_offset = ((y_i % 2) as f32) * (width / 2f32);
+    let row_offset = ((y_i % 2) as f32) * (width / 2f32);
+    let (offset_x, offset_y) = (offset.0 as f32, offset.1 as f32);
 
-    let center_x = (x * width) + x_offset + (width / 2f32);
-    let center_y = y * width * *TANGENT_LENGTH_FACTOR + y_radius;
+    let center_x = (x * width) + row_offset + (width / 2f32) - offset_x;
+    let center_y = y * width * *TANGENT_LENGTH_FACTOR + y_radius - offset_y;
 
     let p1 = round_to_pixel_precision((center_x, center_y - y_radius)); // top
     let p2 = round_to_pixel_precision((center_x + x_radius, center_y - r_half)); // top-right
