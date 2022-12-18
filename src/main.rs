@@ -26,7 +26,7 @@ struct AppState {
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
 
-    // TODO: Make it possible to generate a new map without restarting the app
+    // TODO: Export to image file with max/high zoom level
     // TODO: Generation in separate thread (with RWMutex) so that we can already render the partial map
     //  and see updates
     // TODO: Maybe intentionally slow down generation then to be able to see the steps properly
@@ -43,7 +43,6 @@ fn main() -> Result<(), String> {
             break;
         }
 
-        // TODO: Store origin + window size in struct to be able to drag map
         canvas.set_draw_color(Color::RGB(50, 50, 50));
         canvas.clear();
 
