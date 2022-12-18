@@ -32,6 +32,8 @@ fn main() -> Result<(), String> {
     // TODO: Maybe intentionally slow down generation then to be able to see the steps properly
     // TODO: Infinite Scrolling/Wrap-around effect
     // TODO: Zoom to MousePos?
+    // TODO: Randomly generate elevation (highs/lows less likely?), smooth elevation & color depending on elevation
+    // TODO: More terrains
     let mut app_state = AppState {
         map_state: MapState::new(MAP_SIZE.0, MAP_SIZE.0)?,
         viewport_state: ViewPortState::new(),
