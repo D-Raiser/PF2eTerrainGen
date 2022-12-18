@@ -1,20 +1,31 @@
+mod map;
 mod renderer;
 
 #[macro_use]
 extern crate lazy_static;
 
+use crate::map::{Hex, HexType, Map};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::WindowCanvas;
 use sdl2::EventPump;
 
-const SCREEN_WIDTH: u32 = 2560;
-const SCREEN_HEIGHT: u32 = 1440;
+const SCREEN_WIDTH: u32 = 800;
+const SCREEN_HEIGHT: u32 = 600;
 const WINDOW_TITLE: &str = "PF2e Terrain Generator";
+const HEX_SIZE: i16 = 20;
 
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
+
+    // TODO: Make it possible to generate a new map without restarting the app
+    // TODO: h&w must be even to for seamless looping
+    // TODO: Generation in separate thread (with RWMutex) so that we can already render the partial map
+    //  and see updates
+    // TODO: Maybe intentionally slow down generation then to be able to see the steps properly
+    // TODO: Infinite Scrolling/Wrap-around effect
+    let map = Map::generate(10, 10)?;
 
     loop {
         let quit = handle_events(&mut event_pump);
@@ -22,16 +33,33 @@ fn main() -> Result<(), String> {
             break;
         }
 
-        canvas.set_draw_color(Color::RGB(0, 0, 0));
+        // TODO: Store origin + window size in struct to be able to drag map
+        canvas.set_draw_color(Color::RGB(50, 50, 50));
         canvas.clear();
 
-        renderer::render_hex(&canvas, (600, 600), 500, Color::RGB(128, 0, 128))?;
-        renderer::render_hex(&canvas, (50, 50), 40, Color::RGB(0, 128, 128))?;
+        for (y, row) in map.tiles.iter().enumerate() {
+            for (x, hex) in row.iter().enumerate() {
+                renderer::render_hex_indexed(
+                    &canvas,
+                    (x as i16, y as i16),
+                    HEX_SIZE,
+                    color_for_hex(hex),
+                )?;
+            }
+        }
 
         canvas.present();
     }
 
     Ok(())
+}
+
+fn color_for_hex(hex: &Hex) -> Color {
+    match hex.hex_type {
+        HexType::Water => Color::BLUE,
+        HexType::Forest => Color::GREEN,
+        _ => Color::RGB(50, 50, 50),
+    }
 }
 
 fn handle_events(event_pump: &mut EventPump) -> bool {
