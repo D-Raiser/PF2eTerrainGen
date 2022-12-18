@@ -55,6 +55,7 @@ fn show_window() -> Result<(EventPump, WindowCanvas), String> {
     let window = match sdl_context
         .video()?
         .window(WINDOW_TITLE, SCREEN_WIDTH, SCREEN_HEIGHT)
+        .resizable()
         .position_centered()
         .build()
     {
