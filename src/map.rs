@@ -6,11 +6,11 @@ pub struct MapState {
 }
 
 impl MapState {
-    pub fn new(height: i16, width: i16) -> Result<MapState, String> {
-        let map = Map::generate((height, width))?;
+    pub fn new(width: i16, height: i16) -> Result<MapState, String> {
+        let map = Map::generate((width, height))?;
         Ok(MapState {
             map,
-            map_size: (height, width),
+            map_size: (width, height),
         })
     }
 }
@@ -39,7 +39,7 @@ pub enum HexType {
 
 impl Map {
     pub fn generate(dimensions: (i16, i16)) -> Result<Map, String> {
-        let (height, width) = dimensions;
+        let (width, height) = dimensions;
         if height % 2 != 0 || width % 2 != 0 || height < 2 || width < 2 {
             // With uneven numbers the map cannot be tiled infinitely without gaps
             return Err(String::from("Map dimensions must be even positive numbers"));

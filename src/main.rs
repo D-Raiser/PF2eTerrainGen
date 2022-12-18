@@ -16,6 +16,7 @@ use sdl2::EventPump;
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
 const WINDOW_TITLE: &str = "PF2e Terrain Generator";
+const MAP_SIZE: (i16, i16) = (50, 50);
 
 struct AppState {
     pub viewport_state: ViewPortState,
@@ -32,7 +33,7 @@ fn main() -> Result<(), String> {
     // TODO: Infinite Scrolling/Wrap-around effect
     // TODO: Zoom to MousePos?
     let mut app_state = AppState {
-        map_state: MapState::new(10, 10)?,
+        map_state: MapState::new(MAP_SIZE.0, MAP_SIZE.0)?,
         viewport_state: ViewPortState::new(),
     };
 
