@@ -1,9 +1,6 @@
-mod map;
-mod viewport;
-
-use crate::map::{Hex, HexType, Map, MapState};
-use crate::viewport::ViewPortState;
+use pf2e_terrain_gen::map::{Hex, HexType, Map, MapState};
 use pf2e_terrain_gen::rendering::render_hex_indexed;
+use pf2e_terrain_gen::viewport::ViewPortState;
 use sdl2::event::Event;
 use sdl2::image::SaveSurface;
 use sdl2::keyboard::Keycode;
@@ -26,7 +23,6 @@ fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
 
     // TODO: Export to image file with max/high zoom level
-    // TODO: Continue refactoring into lib crate?
     // TODO: Zoom only until whole map is on screen at once (apply similar limit for "save as png"?)
     // TODO: Generation in separate thread (with RWMutex) so that we can already render the partial map
     //  and see updates
