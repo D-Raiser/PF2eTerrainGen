@@ -1,12 +1,10 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use sdl2::gfx::primitives::DrawRenderer;
 use sdl2::pixels::Color;
 use sdl2::render::{Canvas, RenderTarget};
 
-lazy_static! {
-    static ref SQRT_3: f32 = 3f32.sqrt();
-    static ref TANGENT_LENGTH_FACTOR: f32 = *SQRT_3 / 2f32;
-}
+static SQRT_3: Lazy<f32> = Lazy::new(|| 3f32.sqrt());
+static TANGENT_LENGTH_FACTOR: Lazy<f32> = Lazy::new(|| *SQRT_3 / 2f32);
 
 pub fn render_hex_indexed<T: RenderTarget>(
     canvas: &Canvas<T>,
@@ -15,6 +13,7 @@ pub fn render_hex_indexed<T: RenderTarget>(
     // the distance from the middle point to a corner of the hex
     radius: i16,
     color: Color,
+    skip_offscreen: bool,
 ) -> Result<(), String> {
     let (x_i, y_i) = index;
     let (x, y) = (x_i as f32, y_i as f32);
@@ -39,11 +38,27 @@ pub fn render_hex_indexed<T: RenderTarget>(
     let p5 = round_to_pixel_precision((center_x - x_radius, center_y + r_half)); // bottom-left
     let p6 = round_to_pixel_precision((center_x - x_radius, center_y - r_half)); // top-left
 
-    canvas.filled_polygon(
-        &[p1.0, p2.0, p3.0, p4.0, p5.0, p6.0],
-        &[p1.1, p2.1, p3.1, p4.1, p5.1, p6.1],
-        color,
-    )
+    let x_coords = &[p1.0, p2.0, p3.0, p4.0, p5.0, p6.0];
+    let y_coords = &[p1.1, p2.1, p3.1, p4.1, p5.1, p6.1];
+    let size = canvas.output_size()?;
+    let is_x_completely_offscreen = x_coords
+        .iter()
+        .all(|&v| is_out_of_bounds(v, 0, size.0 as i16));
+    let is_y_completely_offscreen = y_coords
+        .iter()
+        .all(|&v| is_out_of_bounds(v, 0, size.1 as i16));
+
+    if skip_offscreen && (is_x_completely_offscreen || is_y_completely_offscreen) {
+        // TODO: Calculate which indexes to show outside the loop calling this function
+        //  for better performance
+        return Ok(());
+    }
+
+    canvas.filled_polygon(x_coords, y_coords, color)
+}
+
+fn is_out_of_bounds(p: i16, min: i16, max: i16) -> bool {
+    p < min || p > max
 }
 
 fn round_to_pixel_precision(p: (f32, f32)) -> (i16, i16) {

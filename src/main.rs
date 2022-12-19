@@ -1,4 +1,4 @@
-use pf2e_terrain_gen::map::{Hex, HexType, Map, MapState};
+use pf2e_terrain_gen::map::{Map, MapState};
 use pf2e_terrain_gen::rendering::render_hex_indexed;
 use pf2e_terrain_gen::viewport::ViewPortState;
 use sdl2::event::Event;
@@ -12,7 +12,9 @@ use sdl2::EventPump;
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
 const WINDOW_TITLE: &str = "PF2e Terrain Generator";
-const MAP_SIZE: (i16, i16) = (10, 10);
+// roughly earth sized: 2076
+const MAP_SIZE: (i16, i16) = (1024, 1024);
+const SMOOTHING_ITERATIONS: u16 = 0;
 
 struct AppState {
     pub viewport_state: ViewPortState,
@@ -22,17 +24,18 @@ struct AppState {
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
 
-    // TODO: Export to image file with max/high zoom level
+    // TODO: Only calculate part that will be visible for increased performance
+    // TODO: Export with max/high zoom level
     // TODO: Zoom only until whole map is on screen at once (apply similar limit for "save as png"?)
     // TODO: Generation in separate thread (with RWMutex) so that we can already render the partial map
     //  and see updates
     // TODO: Maybe intentionally slow down generation then to be able to see the steps properly
-    // TODO: Infinite Scrolling/Wrap-around effect
-    // TODO: Zoom to MousePos?
-    // TODO: Randomly generate elevation (highs/lows less likely?), smooth elevation & color depending on elevation
-    // TODO: More terrains
+    // TODO: Infinite Scrolling/Wrap-around effect (only in horizontal direction)
+    // TODO: Zoom to MousePos
+
+    // TODO: MAYBE Randomly generate elevation (highs/lows less likely?), smooth elevation & color depending on elevation
     let mut app_state = AppState {
-        map_state: MapState::new(MAP_SIZE.0, MAP_SIZE.0)?,
+        map_state: MapState::new(MAP_SIZE.0, MAP_SIZE.0, SMOOTHING_ITERATIONS)?,
         viewport_state: ViewPortState::new(),
     };
 
@@ -45,7 +48,12 @@ fn main() -> Result<(), String> {
         canvas.set_draw_color(Color::RGB(50, 50, 50));
         canvas.clear();
 
-        render_map(&canvas, &app_state.map_state.map, &app_state.viewport_state)?;
+        render_map(
+            &canvas,
+            &app_state.map_state.map,
+            &app_state.viewport_state,
+            true,
+        )?;
 
         canvas.present();
     }
@@ -57,6 +65,7 @@ fn render_map<T: RenderTarget>(
     canvas: &Canvas<T>,
     map: &Map,
     viewport_state: &ViewPortState,
+    skip_offscreen: bool,
 ) -> Result<(), String> {
     for (y, row) in map.tiles.iter().enumerate() {
         for (x, hex) in row.iter().enumerate() {
@@ -65,20 +74,13 @@ fn render_map<T: RenderTarget>(
                 viewport_state.offset,
                 (x as i16, y as i16),
                 viewport_state.zoom_level,
-                color_for_hex(hex),
+                hex.hex_type.color,
+                skip_offscreen,
             )?;
         }
     }
 
     Ok(())
-}
-
-fn color_for_hex(hex: &Hex) -> Color {
-    match hex.hex_type {
-        HexType::Water => Color::BLUE,
-        HexType::Forest => Color::GREEN,
-        _ => Color::RGB(50, 50, 50),
-    }
 }
 
 fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result<bool, String> {
@@ -95,7 +97,8 @@ fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result
                 keycode: Some(Keycode::R),
                 ..
             } => {
-                app_state.map_state.map = Map::generate(app_state.map_state.map_size)?;
+                app_state.map_state.map =
+                    Map::generate(app_state.map_state.map_size, app_state.map_state.iterations)?;
             }
             Event::KeyDown {
                 keycode: Some(Keycode::P),
@@ -113,10 +116,10 @@ fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result
 
 fn save_as_png(map: &Map, viewport_state: &ViewPortState) -> Result<(), String> {
     let pixel_format = PixelFormatEnum::RGBA8888;
-    let surface = Surface::new(1000, 1000, pixel_format)?;
+    let surface = Surface::new(1000, 1000, pixel_format)?; // TODO: Fit size to map
     let canvas = Canvas::from_surface(surface)?;
 
-    render_map(&canvas, map, viewport_state)?;
+    render_map(&canvas, map, viewport_state, false)?;
 
     let mut pixels = canvas.read_pixels(None, pixel_format)?;
     let (width, height) = canvas.output_size()?;
