@@ -1,14 +1,15 @@
+use lazy_static::lazy_static;
 use sdl2::gfx::primitives::DrawRenderer;
 use sdl2::pixels::Color;
-use sdl2::render::WindowCanvas;
+use sdl2::render::{Canvas, RenderTarget};
 
 lazy_static! {
     static ref SQRT_3: f32 = 3f32.sqrt();
     static ref TANGENT_LENGTH_FACTOR: f32 = *SQRT_3 / 2f32;
 }
 
-pub fn render_hex_indexed(
-    canvas: &WindowCanvas,
+pub fn render_hex_indexed<T: RenderTarget>(
+    canvas: &Canvas<T>,
     offset: (i16, i16),
     index: (i16, i16),
     // the distance from the middle point to a corner of the hex

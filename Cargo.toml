@@ -11,4 +11,4 @@ rand = "0.8.5"
 
 [dependencies.sdl2]
 version = "0.35"
-features = ["gfx", "bundled"]
+features = ["image", "gfx", "bundled"]
