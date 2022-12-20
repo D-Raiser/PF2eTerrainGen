@@ -1,17 +1,18 @@
+use crate::map::MapState;
 use once_cell::sync::Lazy;
 use sdl2::gfx::primitives::DrawRenderer;
 use sdl2::pixels::Color;
 use sdl2::render::{Canvas, RenderTarget};
+use std::cmp::{max, min};
 
 static SQRT_3: Lazy<f32> = Lazy::new(|| 3f32.sqrt());
 static TANGENT_LENGTH_FACTOR: Lazy<f32> = Lazy::new(|| *SQRT_3 / 2f32);
 
 // to only compute numbers identical across all hexes once
 pub struct HexRenderer {
-    pub width: f32,
+    pub hex_width: f32,
     // the vertical distance between hexagons of two connected rows, NOT the true height of the hex
     pub tiling_height: f32,
-    skip_offscreen: bool,
     pub offset_x: f32,
     pub offset_y: f32,
     // the distance from the middle point to the middle of an edge of the hex
@@ -22,7 +23,7 @@ pub struct HexRenderer {
 }
 
 impl HexRenderer {
-    pub fn new(skip_offscreen: bool, hex_radius: i16, viewport_offset: (i16, i16)) -> HexRenderer {
+    pub fn new(hex_radius: i16, viewport_offset: (i16, i16)) -> HexRenderer {
         let y_radius = hex_radius as f32;
         let width = *SQRT_3 * y_radius;
         let height = width * *TANGENT_LENGTH_FACTOR;
@@ -33,15 +34,43 @@ impl HexRenderer {
             half_radius: r_half,
             offset_x: viewport_offset.0 as f32,
             offset_y: viewport_offset.1 as f32,
-            width,
+            hex_width: width,
             tiling_height: height,
             y_radius,
             x_radius,
-            skip_offscreen,
         }
     }
 
-    pub fn render_hex_indexed<T: RenderTarget>(
+    // returns the dimensions required to render a map of the provided size
+    pub fn get_bounds(&self, map_size: (i16, i16)) -> (u32, u32) {
+        let (x, y) = map_size;
+        // every second row is horizontally offset by half a tile
+        let total_width = self.hex_width * (x as f32) + 0.5 * self.hex_width;
+        let total_height = self.tiling_height * (y as f32) + 0.5 * self.y_radius;
+
+        (total_width.round() as u32, total_height.round() as u32)
+    }
+
+    pub fn render_map<T: RenderTarget>(
+        &self,
+        canvas: &Canvas<T>,
+        map_state: &MapState,
+        skip_offscreen: bool,
+    ) -> Result<(), String> {
+        let ((min_idx_x, min_idx_y), (max_idx_x, max_idx_y)) =
+            self.get_index_range(map_state.map_size, skip_offscreen);
+
+        for x in min_idx_x..=max_idx_x {
+            for y in min_idx_y..=max_idx_y {
+                let hex = &map_state.map.tiles[x][y];
+                self.render_hex_indexed(&canvas, (x as i16, y as i16), hex.hex_type.color)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn render_hex_indexed<T: RenderTarget>(
         &self,
         canvas: &Canvas<T>,
         index: (i16, i16),
@@ -54,7 +83,7 @@ impl HexRenderer {
         // every 2nd row needs to be shifted by half a hex for a continuous pattern
         let row_offset = ((y_i % 2) as f32) * self.x_radius;
 
-        let center_x = x * self.width + self.x_radius - self.offset_x + row_offset;
+        let center_x = x * self.hex_width + self.x_radius - self.offset_x + row_offset;
         let center_y = y * self.tiling_height + self.y_radius - self.offset_y;
 
         let p1 = round_to_pixel_precision((center_x, center_y - self.y_radius)); // top
@@ -70,61 +99,48 @@ impl HexRenderer {
 
         canvas.filled_polygon(x_coordinates, y_coordinates, color)
     }
-}
-//
-// pub fn render_hex_indexed<T: RenderTarget>(
-//     canvas: &Canvas<T>,
-//     offset: (i16, i16),
-//     index: (i16, i16),
-//     // the distance from the middle point to a corner of the hex
-//     radius: i16,
-//     color: Color,
-//     skip_offscreen: bool,
-// ) -> Result<(), String> {
-//     let (x_i, y_i) = index;
-//     let (x, y) = (x_i as f32, y_i as f32);
-//
-//     let width = *SQRT_3 * (radius as f32);
-//     // the distance from the middle point to the middle of an edge of the hex
-//     let x_radius = width / 2f32;
-//     let y_radius = radius as f32;
-//     let r_half = y_radius / 2f32;
-//
-//     // every 2nd row needs to be shifted by half a hex for a continuous pattern
-//     let row_offset = ((y_i % 2) as f32) * (width / 2f32);
-//     let (offset_x, offset_y) = (offset.0 as f32, offset.1 as f32);
-//
-//     let center_x = (x * width) + row_offset + (width / 2f32) - offset_x;
-//     let center_y = y * width * *TANGENT_LENGTH_FACTOR + y_radius - offset_y;
-//
-//     let p1 = round_to_pixel_precision((center_x, center_y - y_radius)); // top
-//     let p2 = round_to_pixel_precision((center_x + x_radius, center_y - r_half)); // top-right
-//     let p3 = round_to_pixel_precision((center_x + x_radius, center_y + r_half)); // bottom-right
-//     let p4 = round_to_pixel_precision((center_x, center_y + y_radius)); // bottom
-//     let p5 = round_to_pixel_precision((center_x - x_radius, center_y + r_half)); // bottom-left
-//     let p6 = round_to_pixel_precision((center_x - x_radius, center_y - r_half)); // top-left
-//
-//     let x_coords = &[p1.0, p2.0, p3.0, p4.0, p5.0, p6.0];
-//     let y_coords = &[p1.1, p2.1, p3.1, p4.1, p5.1, p6.1];
-//     let size = canvas.output_size()?;
-//     let is_x_completely_offscreen = x_coords
-//         .iter()
-//         .all(|&v| is_out_of_bounds(v, 0, size.0 as i16));
-//     let is_y_completely_offscreen = y_coords
-//         .iter()
-//         .all(|&v| is_out_of_bounds(v, 0, size.1 as i16));
-//
-//     if skip_offscreen && (is_x_completely_offscreen || is_y_completely_offscreen) {
-//         // TODO: Calculate which indexes to show outside the loop calling this function
-//         //  for better performance
-//         return Ok(());
-//     }
-//
-//     canvas.filled_polygon(x_coords, y_coords, color)
-// }
 
-fn is_out_of_bounds(p: i16, min: i16, max: i16) -> bool {
-    p < min || p > max
+    // returns minimum and maximum index of tiles to be rendered
+    fn get_index_range(
+        &self,
+        map_size: (i16, i16),
+        skip_offscreen: bool,
+    ) -> ((usize, usize), (usize, usize)) {
+        let (mut min_idx_x, mut min_idx_y) = (0 as usize, 0 as usize);
+        let (mut max_idx_x, mut max_idx_y) = (map_size.0 as usize - 1, map_size.1 as usize - 1);
+
+        if skip_offscreen {
+            // pre-calculate which tiles will be visible to skip anything other than these tiles
+            // for better performance
+            let (min_x, min_y) = (self.offset_x, self.offset_y);
+            let (max_x, max_y) = (
+                self.offset_x + map_size.0 as f32,
+                self.offset_y + map_size.1 as f32,
+            );
+
+            let padding = 1f32;
+            // subtract/add 1 to the min/max just to be sure that enough is always rendered to not have
+            // any clipping at the screen borders
+            min_idx_x = max(
+                (((min_x / self.hex_width) - 0.5).round() - padding) as usize,
+                0,
+            );
+            min_idx_y = max(
+                (((min_y - self.y_radius) / self.tiling_height).round() - padding) as usize,
+                0,
+            );
+            max_idx_x = min(
+                (((max_x / self.hex_width) - 0.5).round() + padding) as usize,
+                map_size.0 as usize - 1,
+            );
+            max_idx_y = min(
+                (((max_y - self.y_radius) / self.tiling_height).round() + padding) as usize,
+                map_size.1 as usize - 1,
+            );
+        }
+
+        ((min_idx_x, min_idx_y), (max_idx_x, max_idx_y))
+    }
 }
 
 fn round_to_pixel_precision(p: (f32, f32)) -> (i16, i16) {
