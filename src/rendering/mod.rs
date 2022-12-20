@@ -69,7 +69,7 @@ impl HexRenderer {
                     &canvas,
                     (x as i16, y as i16),
                     viewport_offset,
-                    hex.hex_type.color,
+                    hex.environment.color(),
                 )?;
             }
         }

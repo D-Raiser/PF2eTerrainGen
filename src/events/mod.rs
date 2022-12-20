@@ -1,6 +1,5 @@
 use crate::app_state::AppState;
 use crate::image::save_as_png;
-use crate::map::Map;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::EventPump;
@@ -19,8 +18,7 @@ pub fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Re
                 keycode: Some(Keycode::R),
                 ..
             } => {
-                app_state.map_state.map =
-                    Map::generate(app_state.map_state.map_size, app_state.map_state.iterations)?;
+                app_state.map_state.regenerate_map()?;
             }
             Event::KeyDown {
                 keycode: Some(Keycode::P),
