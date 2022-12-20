@@ -1,9 +1,8 @@
-use pf2e_terrain_gen::image::save_as_png;
-use pf2e_terrain_gen::map::{Map, MapState};
+use pf2e_terrain_gen::app_state::AppState;
+use pf2e_terrain_gen::events::handle_events;
+use pf2e_terrain_gen::map::MapState;
 use pf2e_terrain_gen::rendering::HexRenderer;
 use pf2e_terrain_gen::viewport::ViewPortState;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::WindowCanvas;
 use sdl2::EventPump;
@@ -15,11 +14,6 @@ const WINDOW_TITLE: &str = "PF2e Terrain Generator";
 // roughly earth sized: 2076
 const MAP_SIZE: (i16, i16) = (400, 400);
 const SMOOTHING_ITERATIONS: u16 = 0;
-
-struct AppState {
-    pub viewport_state: ViewPortState,
-    pub map_state: MapState,
-}
 
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
@@ -57,39 +51,6 @@ fn main() -> Result<(), String> {
     }
 
     Ok(())
-}
-
-// TODO: Maybe refactor to `events` module?
-fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result<bool, String> {
-    for event in event_pump.poll_iter() {
-        match event {
-            Event::Quit { .. }
-            | Event::KeyDown {
-                keycode: Some(Keycode::Escape),
-                ..
-            } => {
-                return Ok(true);
-            }
-            Event::KeyDown {
-                keycode: Some(Keycode::R),
-                ..
-            } => {
-                app_state.map_state.map =
-                    Map::generate(app_state.map_state.map_size, app_state.map_state.iterations)?;
-            }
-            Event::KeyDown {
-                keycode: Some(Keycode::P),
-                ..
-            } => {
-                // 30: 400x400 works, 500x500 breaks
-                save_as_png(&app_state.map_state, 30)?;
-            }
-            _ => {
-                app_state.viewport_state.handle_events(event);
-            }
-        }
-    }
-    return Ok(false);
 }
 
 fn show_window() -> Result<(EventPump, WindowCanvas), String> {
