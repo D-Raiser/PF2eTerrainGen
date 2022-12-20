@@ -5,13 +5,9 @@ use sdl2::event::Event;
 use sdl2::image::SaveSurface;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
-use sdl2::render::{Canvas, RenderTarget, WindowCanvas};
+use sdl2::render::{Canvas, WindowCanvas};
 use sdl2::surface::Surface;
-use sdl2::sys::image;
-use sdl2::{get_error, EventPump};
-use std::cmp::{max, min};
-use std::ffi::CString;
-use std::path::Path;
+use sdl2::EventPump;
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
@@ -28,11 +24,10 @@ struct AppState {
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
 
-    // TODO: Export with max/high zoom level
-    // TODO: Zoom only until whole map is on screen at once (apply similar limit for "save as png"?)
+    // TODO: Zoom only until whole map is on screen at once
     // TODO: Generation in separate thread (with RWMutex) so that we can already render the partial map
     //  and see updates
-    // TODO: Maybe intentionally slow down generation then to be able to see the steps properly
+    //  + Maybe intentionally slow down generation then to be able to see the steps properly
     // TODO: Infinite Scrolling/Wrap-around effect (only in horizontal direction)
     // TODO: Zoom to MousePos
 
@@ -96,7 +91,6 @@ fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result
 }
 
 fn save_as_png(map_state: &MapState) -> Result<(), String> {
-    println!("SAVING");
     let pixel_format = PixelFormatEnum::RGBA8888;
     // TODO: Memory Crash when total size too big
     let renderer = HexRenderer::new(6, (0, 0));
@@ -119,8 +113,9 @@ fn save_as_png(map_state: &MapState) -> Result<(), String> {
         pixel_format,
     )?;
 
+    // TODO: Timestamp in name to not overwrite existing ones?
     surface.save("./test.png")?;
-    println!("SAVED");
+    println!("Successfully saved image");
     Ok(())
 }
 
