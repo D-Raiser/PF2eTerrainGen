@@ -1,19 +1,19 @@
+use pf2e_terrain_gen::image::save_as_png;
 use pf2e_terrain_gen::map::{Map, MapState};
 use pf2e_terrain_gen::rendering::HexRenderer;
 use pf2e_terrain_gen::viewport::ViewPortState;
 use sdl2::event::Event;
-use sdl2::image::SaveSurface;
 use sdl2::keyboard::Keycode;
-use sdl2::pixels::{Color, PixelFormatEnum};
-use sdl2::render::{Canvas, WindowCanvas};
-use sdl2::surface::Surface;
+use sdl2::pixels::Color;
+use sdl2::render::WindowCanvas;
 use sdl2::EventPump;
 
+// TODO: Double check types (unsigned vs. signed & size)
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
 const WINDOW_TITLE: &str = "PF2e Terrain Generator";
 // roughly earth sized: 2076
-const MAP_SIZE: (i16, i16) = (2076, 2076);
+const MAP_SIZE: (i16, i16) = (400, 400);
 const SMOOTHING_ITERATIONS: u16 = 0;
 
 struct AppState {
@@ -46,11 +46,12 @@ fn main() -> Result<(), String> {
         canvas.set_draw_color(Color::RGB(50, 50, 50));
         canvas.clear();
 
-        HexRenderer::new(
-            app_state.viewport_state.zoom_level,
+        HexRenderer::new(app_state.viewport_state.zoom_level).render_map(
+            &canvas,
             app_state.viewport_state.offset,
-        )
-        .render_map(&canvas, &app_state.map_state, true)?;
+            &app_state.map_state,
+            true,
+        )?;
 
         canvas.present();
     }
@@ -80,7 +81,8 @@ fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result
                 keycode: Some(Keycode::P),
                 ..
             } => {
-                save_as_png(&app_state.map_state)?;
+                // 30: 400x400 works, 500x500 breaks
+                save_as_png(&app_state.map_state, 30)?;
             }
             _ => {
                 app_state.viewport_state.handle_events(event);
@@ -88,35 +90,6 @@ fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result
         }
     }
     return Ok(false);
-}
-
-fn save_as_png(map_state: &MapState) -> Result<(), String> {
-    let pixel_format = PixelFormatEnum::RGBA8888;
-    // TODO: Memory Crash when total size too big
-    let renderer = HexRenderer::new(6, (0, 0));
-    let (width, height) = renderer.get_bounds(map_state.map_size);
-    println!("{:?}", renderer.get_bounds(map_state.map_size));
-
-    let surface = Surface::new(width, height, pixel_format)?;
-    let canvas = Canvas::from_surface(surface)?;
-
-    renderer.render_map(&canvas, &map_state, false)?;
-
-    let mut pixels = canvas.read_pixels(None, pixel_format)?;
-    let (width, height) = canvas.output_size()?;
-    let pitch = pixel_format.byte_size_of_pixels(width as usize);
-    let surface = Surface::from_data(
-        pixels.as_mut_slice(),
-        width,
-        height,
-        pitch as u32,
-        pixel_format,
-    )?;
-
-    // TODO: Timestamp in name to not overwrite existing ones?
-    surface.save("./test.png")?;
-    println!("Successfully saved image");
-    Ok(())
 }
 
 fn show_window() -> Result<(EventPump, WindowCanvas), String> {

@@ -46,6 +46,7 @@ impl ViewPortState {
                     min(self.zoom_level + dir * (y as i16), MAX_ZOOM_LEVEL),
                     MIN_ZOOM_LEVEL,
                 );
+                println!("Debug Zoom: {}", self.zoom_level); // TODO: Sometimes when scrolling out, the image just disappears entirely
             }
             _ => {}
         }

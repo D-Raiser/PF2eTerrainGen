@@ -13,8 +13,6 @@ pub struct HexRenderer {
     pub hex_width: f32,
     // the vertical distance between hexagons of two connected rows, NOT the true height of the hex
     pub tiling_height: f32,
-    pub offset_x: f32,
-    pub offset_y: f32,
     // the distance from the middle point to the middle of an edge of the hex
     x_radius: f32,
     pub y_radius: f32,
@@ -23,7 +21,7 @@ pub struct HexRenderer {
 }
 
 impl HexRenderer {
-    pub fn new(hex_radius: i16, viewport_offset: (i16, i16)) -> HexRenderer {
+    pub fn new(hex_radius: i16) -> HexRenderer {
         let y_radius = hex_radius as f32;
         let width = *SQRT_3 * y_radius;
         let height = width * *TANGENT_LENGTH_FACTOR;
@@ -32,8 +30,6 @@ impl HexRenderer {
 
         HexRenderer {
             half_radius: r_half,
-            offset_x: viewport_offset.0 as f32,
-            offset_y: viewport_offset.1 as f32,
             hex_width: width,
             tiling_height: height,
             y_radius,
@@ -42,28 +38,39 @@ impl HexRenderer {
     }
 
     // returns the dimensions required to render a map of the provided size
-    pub fn get_bounds(&self, map_size: (i16, i16)) -> (u32, u32) {
+    pub fn get_bounds(&self, map_size: (i16, i16)) -> (u16, u16) {
         let (x, y) = map_size;
         // every second row is horizontally offset by half a tile
         let total_width = self.hex_width * (x as f32) + 0.5 * self.hex_width;
         let total_height = self.tiling_height * (y as f32) + 0.5 * self.y_radius;
 
-        (total_width.round() as u32, total_height.round() as u32)
+        (total_width.round() as u16, total_height.round() as u16)
     }
 
     pub fn render_map<T: RenderTarget>(
         &self,
         canvas: &Canvas<T>,
+        viewport_offset: (i16, i16),
         map_state: &MapState,
         skip_offscreen: bool,
     ) -> Result<(), String> {
-        let ((min_idx_x, min_idx_y), (max_idx_x, max_idx_y)) =
-            self.get_index_range(map_state.map_size, skip_offscreen);
+        let viewport_size = canvas.output_size()?;
+        let ((min_idx_x, min_idx_y), (max_idx_x, max_idx_y)) = self.get_index_range(
+            map_state.map_size,
+            viewport_offset,
+            viewport_size,
+            skip_offscreen,
+        );
 
         for x in min_idx_x..=max_idx_x {
             for y in min_idx_y..=max_idx_y {
                 let hex = &map_state.map.tiles[x][y];
-                self.render_hex_indexed(&canvas, (x as i16, y as i16), hex.hex_type.color)?;
+                self.render_hex_indexed(
+                    &canvas,
+                    (x as i16, y as i16),
+                    viewport_offset,
+                    hex.hex_type.color,
+                )?;
             }
         }
 
@@ -74,17 +81,19 @@ impl HexRenderer {
         &self,
         canvas: &Canvas<T>,
         index: (i16, i16),
+        viewport_offset: (i16, i16),
         // the distance from the middle point to a corner of the hex
         color: Color,
     ) -> Result<(), String> {
         let (x_i, y_i) = index;
         let (x, y) = (x_i as f32, y_i as f32);
+        let (offset_x, offset_y) = (viewport_offset.0 as f32, viewport_offset.1 as f32);
 
         // every 2nd row needs to be shifted by half a hex for a continuous pattern
         let row_offset = ((y_i % 2) as f32) * self.x_radius;
 
-        let center_x = x * self.hex_width + self.x_radius - self.offset_x + row_offset;
-        let center_y = y * self.tiling_height + self.y_radius - self.offset_y;
+        let center_x = x * self.hex_width + self.x_radius - offset_x + row_offset;
+        let center_y = y * self.tiling_height + self.y_radius - offset_y;
 
         let p1 = round_to_pixel_precision((center_x, center_y - self.y_radius)); // top
         let p2 = round_to_pixel_precision((center_x + self.x_radius, center_y - self.half_radius)); // top-right
@@ -95,7 +104,6 @@ impl HexRenderer {
 
         let x_coordinates = &[p1.0, p2.0, p3.0, p4.0, p5.0, p6.0];
         let y_coordinates = &[p1.1, p2.1, p3.1, p4.1, p5.1, p6.1];
-        let size = canvas.output_size()?;
 
         canvas.filled_polygon(x_coordinates, y_coordinates, color)
     }
@@ -104,6 +112,8 @@ impl HexRenderer {
     fn get_index_range(
         &self,
         map_size: (i16, i16),
+        viewport_offset: (i16, i16),
+        viewport_size: (u32, u32),
         skip_offscreen: bool,
     ) -> ((usize, usize), (usize, usize)) {
         let (mut min_idx_x, mut min_idx_y) = (0 as usize, 0 as usize);
@@ -112,10 +122,10 @@ impl HexRenderer {
         if skip_offscreen {
             // pre-calculate which tiles will be visible to skip anything other than these tiles
             // for better performance
-            let (min_x, min_y) = (self.offset_x, self.offset_y);
+            let (min_x, min_y) = (viewport_offset.0 as f32, viewport_offset.1 as f32);
             let (max_x, max_y) = (
-                self.offset_x + map_size.0 as f32,
-                self.offset_y + map_size.1 as f32,
+                min_x + viewport_size.0 as f32,
+                min_y + viewport_size.1 as f32,
             );
 
             let padding = 1f32;
