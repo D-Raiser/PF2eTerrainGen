@@ -2,6 +2,7 @@ use once_cell::sync::OnceCell;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use sdl2::pixels::Color;
+use std::collections::HashMap;
 use std::slice::Iter;
 
 pub struct MapState {
@@ -36,7 +37,7 @@ impl Hex {
     };
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub struct HexType {
     pub color: Color,
     // chance to generate a tile of this type in percent
@@ -57,7 +58,9 @@ impl HexType {
     // Common Environments
     const AQUATIC: HexType = HexType {
         color: Color::RGB(0, 130, 220),
-        base_chance: 70,
+        // starting out with 70% (which could be considered realistic) leads to water
+        // spreading even further during smoothing since it's the most prevalent element already
+        base_chance: 14,
         transform_chance: |_| 0,
     };
     const ARCTIC: HexType = HexType {
@@ -135,9 +138,9 @@ impl HexType {
         HEX_TYPES.iter()
     }
 
-    fn transform_chance(hex_type: HexType) -> u16 {
+    fn total_transform_chance(hex_type: HexType) -> u16 {
         HexType::iterator()
-            .map(|t| HexType::transform_chance(hex_type)) // TODO: Verify; this doesn't feel correct
+            .map(|&t| (t.transform_chance)(hex_type))
             .sum()
     }
 
@@ -159,7 +162,7 @@ impl Map {
         let mut map = Map { tiles }.populate();
 
         for _ in 0..iterations {
-            map = map.smooth();
+            map.smooth();
         }
 
         Ok(map)
@@ -182,8 +185,75 @@ impl Map {
         self
     }
 
-    fn smooth(self) -> Map {
-        self
+    fn smooth(&mut self) {
+        let mut rng = rand::thread_rng();
+
+        let max_y = self.tiles.len() - 1;
+        let max_x = self.tiles[0].len() - 1;
+
+        for y in 0..=max_y {
+            for x in 0..=max_x {
+                let op = rng.gen_range(0..100);
+                if op < 45 {
+                    // do nothing
+                    continue;
+                } else if op < 55 {
+                    // transform the hex
+                    self.tiles[y][x] = Hex {
+                        hex_type: Map::transform_hex(self.tiles[y][x].hex_type, &mut rng),
+                    }
+                } else {
+                    // determine tile's type by averaging the surroundings
+                    let y_above = if y > 0 { y - 1 } else { max_y };
+                    let y_below = if y < max_y { y + 1 } else { 0 };
+                    let x_left = if x > 0 { x - 1 } else { max_x };
+                    let x_right = if x < max_x { x + 1 } else { 0 };
+
+                    let surrounding_types: [HexType; 8] = [
+                        self.tiles[y_above][x_left].hex_type,
+                        self.tiles[y_above][x].hex_type,
+                        self.tiles[y_above][x_right].hex_type,
+                        self.tiles[y][x_left].hex_type,
+                        self.tiles[y][x_right].hex_type,
+                        self.tiles[y_below][x_left].hex_type,
+                        self.tiles[y_below][x].hex_type,
+                        self.tiles[y_below][x_right].hex_type,
+                    ];
+
+                    let most_frequent_type = surrounding_types
+                        .into_iter()
+                        .fold(HashMap::<HexType, usize>::new(), |mut map, hex_type| {
+                            *map.entry(hex_type).or_default() += 1;
+                            map
+                        })
+                        .into_iter()
+                        .max_by_key(|(_, cnt)| *cnt)
+                        .map(|(k, _)| k)
+                        .unwrap();
+                    self.tiles[y][x] = Hex {
+                        hex_type: most_frequent_type,
+                    }
+                }
+            }
+        }
+    }
+
+    fn transform_hex(hex_type: HexType, rng: &mut ThreadRng) -> HexType {
+        let total_chance = HexType::total_transform_chance(hex_type);
+        if total_chance == 0 {
+            return hex_type;
+        }
+
+        let n = rng.gen_range(0..total_chance);
+        let (_, ret) =
+            HexType::iterator().fold((0, HexType::NONE), |(summed_percentage, ret), &t| {
+                if summed_percentage > n {
+                    (summed_percentage, ret)
+                } else {
+                    (summed_percentage + (t.transform_chance)(hex_type), t)
+                }
+            });
+        ret
     }
 
     fn generate_hex(

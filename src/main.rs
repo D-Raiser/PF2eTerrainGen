@@ -12,8 +12,8 @@ const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
 const WINDOW_TITLE: &str = "PF2e Terrain Generator";
 // roughly earth sized: 2076
-const MAP_SIZE: (i16, i16) = (400, 400);
-const SMOOTHING_ITERATIONS: u16 = 0;
+const MAP_SIZE: (i16, i16) = (300, 300);
+const SMOOTHING_ITERATIONS: u16 = 5;
 
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;

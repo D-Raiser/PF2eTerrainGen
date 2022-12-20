@@ -27,7 +27,8 @@ pub fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Re
                 ..
             } => {
                 // 30: 400x400 works, 500x500 breaks
-                save_as_png(&app_state.map_state, 30)?;
+                // 40: 300x300 works,
+                save_as_png(&app_state.map_state, 40)?;
             }
             _ => {
                 app_state.viewport_state.handle_events(event);
