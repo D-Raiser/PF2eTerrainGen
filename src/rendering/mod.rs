@@ -8,14 +8,16 @@ static TANGENT_LENGTH_FACTOR: Lazy<f32> = Lazy::new(|| *SQRT_3 / 2f32);
 
 // to only compute numbers identical across all hexes once
 pub struct HexRenderer {
-    width: f32,
-    height: f32,
+    pub width: f32,
+    // the vertical distance between hexagons of two connected rows, NOT the true height of the hex
+    pub tiling_height: f32,
     skip_offscreen: bool,
-    offset_x: f32,
-    offset_y: f32,
+    pub offset_x: f32,
+    pub offset_y: f32,
     // the distance from the middle point to the middle of an edge of the hex
     x_radius: f32,
-    y_radius: f32,
+    pub y_radius: f32,
+    // half the length of any of the sides of all six triangles that make up the hexagon
     half_radius: f32,
 }
 
@@ -32,7 +34,7 @@ impl HexRenderer {
             offset_x: viewport_offset.0 as f32,
             offset_y: viewport_offset.1 as f32,
             width,
-            height,
+            tiling_height: height,
             y_radius,
             x_radius,
             skip_offscreen,
@@ -53,7 +55,7 @@ impl HexRenderer {
         let row_offset = ((y_i % 2) as f32) * self.x_radius;
 
         let center_x = x * self.width + self.x_radius - self.offset_x + row_offset;
-        let center_y = y * self.height + self.y_radius - self.offset_y;
+        let center_y = y * self.tiling_height + self.y_radius - self.offset_y;
 
         let p1 = round_to_pixel_precision((center_x, center_y - self.y_radius)); // top
         let p2 = round_to_pixel_precision((center_x + self.x_radius, center_y - self.half_radius)); // top-right
@@ -65,21 +67,6 @@ impl HexRenderer {
         let x_coordinates = &[p1.0, p2.0, p3.0, p4.0, p5.0, p6.0];
         let y_coordinates = &[p1.1, p2.1, p3.1, p4.1, p5.1, p6.1];
         let size = canvas.output_size()?;
-
-        if self.skip_offscreen {
-            let is_x_completely_offscreen = x_coordinates
-                .iter()
-                .all(|&v| is_out_of_bounds(v, 0, size.0 as i16));
-            let is_y_completely_offscreen = y_coordinates
-                .iter()
-                .all(|&v| is_out_of_bounds(v, 0, size.1 as i16));
-
-            if is_x_completely_offscreen || is_y_completely_offscreen {
-                // TODO: Calculate which indexes to show outside the loop calling this function
-                //  for better performance
-                return Ok(());
-            }
-        }
 
         canvas.filled_polygon(x_coordinates, y_coordinates, color)
     }

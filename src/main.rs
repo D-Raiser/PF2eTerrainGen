@@ -8,6 +8,7 @@ use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::render::{Canvas, RenderTarget, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::EventPump;
+use std::cmp::{max, min};
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
@@ -50,7 +51,7 @@ fn main() -> Result<(), String> {
 
         render_map(
             &canvas,
-            &app_state.map_state.map,
+            &app_state.map_state,
             &app_state.viewport_state,
             true,
         )?;
@@ -63,7 +64,7 @@ fn main() -> Result<(), String> {
 
 fn render_map<T: RenderTarget>(
     canvas: &Canvas<T>,
-    map: &Map,
+    map_state: &MapState,
     viewport_state: &ViewPortState,
     skip_offscreen: bool,
 ) -> Result<(), String> {
@@ -73,8 +74,43 @@ fn render_map<T: RenderTarget>(
         viewport_state.offset,
     );
 
-    for (y, row) in map.tiles.iter().enumerate() {
-        for (x, hex) in row.iter().enumerate() {
+    let (mut min_idx_x, mut min_idx_y) = (0 as usize, 0 as usize);
+    let (mut max_idx_x, mut max_idx_y) =
+        (map_state.map_size.0 as usize, map_state.map_size.1 as usize);
+
+    if skip_offscreen {
+        // pre-calculate which tiles will be visible to skip anything other than these tiles
+        // for better performance
+        let (min_x, min_y) = (renderer.offset_x, renderer.offset_y);
+        let (max_x, max_y) = (
+            renderer.offset_x + map_state.map_size.0 as f32,
+            renderer.offset_y + map_state.map_size.1 as f32,
+        );
+
+        let padding = 1f32;
+        // subtract/add 1 to the min/max just to be sure that enough is always rendered to not have
+        // any clipping at the screen borders
+        min_idx_x = max(
+            (((min_x / renderer.width) - 0.5).round() - padding) as usize,
+            0,
+        );
+        min_idx_y = max(
+            (((min_y - renderer.y_radius) / renderer.tiling_height).round() - padding) as usize,
+            0,
+        );
+        max_idx_x = min(
+            (((max_x / renderer.width) - 0.5).round() + padding) as usize,
+            map_state.map_size.0 as usize - 1,
+        );
+        max_idx_y = min(
+            (((max_y - renderer.y_radius) / renderer.tiling_height).round() + padding) as usize,
+            map_state.map_size.1 as usize - 1,
+        );
+    }
+
+    for x in min_idx_x..=max_idx_x {
+        for y in min_idx_y..=max_idx_y {
+            let hex = &map_state.map.tiles[x][y];
             renderer.render_hex_indexed(&canvas, (x as i16, y as i16), hex.hex_type.color)?;
         }
     }
@@ -103,7 +139,7 @@ fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result
                 keycode: Some(Keycode::P),
                 ..
             } => {
-                save_as_png(&app_state.map_state.map, &app_state.viewport_state)?;
+                save_as_png(&app_state.map_state, &app_state.viewport_state)?;
             }
             _ => {
                 app_state.viewport_state.handle_events(event);
@@ -113,12 +149,12 @@ fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Result
     return Ok(false);
 }
 
-fn save_as_png(map: &Map, viewport_state: &ViewPortState) -> Result<(), String> {
+fn save_as_png(map_state: &MapState, viewport_state: &ViewPortState) -> Result<(), String> {
     let pixel_format = PixelFormatEnum::RGBA8888;
     let surface = Surface::new(1000, 1000, pixel_format)?; // TODO: Fit size to map
     let canvas = Canvas::from_surface(surface)?;
 
-    render_map(&canvas, map, viewport_state, false)?;
+    render_map(&canvas, map_state, viewport_state, false)?;
 
     let mut pixels = canvas.read_pixels(None, pixel_format)?;
     let (width, height) = canvas.output_size()?;
