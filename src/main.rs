@@ -1,5 +1,5 @@
 use pf2e_terrain_gen::map::{Map, MapState};
-use pf2e_terrain_gen::rendering::render_hex_indexed;
+use pf2e_terrain_gen::rendering::HexRenderer;
 use pf2e_terrain_gen::viewport::ViewPortState;
 use sdl2::event::Event;
 use sdl2::image::SaveSurface;
@@ -67,16 +67,15 @@ fn render_map<T: RenderTarget>(
     viewport_state: &ViewPortState,
     skip_offscreen: bool,
 ) -> Result<(), String> {
+    let renderer = HexRenderer::new(
+        skip_offscreen,
+        viewport_state.zoom_level,
+        viewport_state.offset,
+    );
+
     for (y, row) in map.tiles.iter().enumerate() {
         for (x, hex) in row.iter().enumerate() {
-            render_hex_indexed(
-                &canvas,
-                viewport_state.offset,
-                (x as i16, y as i16),
-                viewport_state.zoom_level,
-                hex.hex_type.color,
-                skip_offscreen,
-            )?;
+            renderer.render_hex_indexed(&canvas, (x as i16, y as i16), hex.hex_type.color)?;
         }
     }
 
