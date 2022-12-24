@@ -18,7 +18,7 @@ pub fn handle_events(event_pump: &mut EventPump, app_state: &mut AppState) -> Re
                 keycode: Some(Keycode::R),
                 ..
             } => {
-                app_state.map_state.regenerate_map()?;
+                app_state.map_state.generate_map()?;
             }
             Event::KeyDown {
                 keycode: Some(Keycode::P),

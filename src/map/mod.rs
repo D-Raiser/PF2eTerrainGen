@@ -4,16 +4,17 @@ mod random_gen;
 
 use crate::map::environments::Environment;
 use crate::map::procedural_gen::ProceduralGenerator;
-use crate::map::random_gen::RandomGenerator;
+use std::sync::{Arc, RwLock};
+use std::thread;
 
 trait MapGenerator {
-    fn populate(&self, map: &mut Map);
-    fn smooth(&self, map: &mut Map);
+    fn populate(&self, map: Arc<RwLock<Map>>, dimensions: (u16, u16));
+    fn smooth(&self, map: Arc<RwLock<Map>>, dimensions: (u16, u16));
 }
 
 pub struct MapState {
-    pub map: Map,
-    pub map_size: (i16, i16),
+    pub map: Arc<RwLock<Map>>,
+    pub map_size: (u16, u16),
     pub iterations: u16,
 }
 
@@ -30,7 +31,7 @@ impl MapState {
     //const GENERATOR: RandomGenerator = RandomGenerator {};
     const GENERATOR: ProceduralGenerator = ProceduralGenerator {};
 
-    fn create_empty_map(dimensions: (i16, i16)) -> Result<Map, String> {
+    fn create_empty_map(dimensions: (u16, u16)) -> Result<Map, String> {
         let (width, height) = dimensions;
         if height % 2 != 0 || width % 2 != 0 || height < 2 || width < 2 {
             // With uneven numbers the map cannot be tiled infinitely without gaps
@@ -50,23 +51,33 @@ impl MapState {
         })
     }
 
-    pub fn new(dimensions: (i16, i16), iterations: u16) -> Result<MapState, String> {
-        let mut map = MapState::create_empty_map(dimensions)?;
-
-        MapState::GENERATOR.populate(&mut map);
-        for _ in 0..iterations {
-            MapState::GENERATOR.smooth(&mut map);
-        }
-
-        Ok(MapState {
-            map,
+    pub fn new(dimensions: (u16, u16), iterations: u16) -> Result<MapState, String> {
+        let mut state = MapState {
+            map: Arc::new(RwLock::new(MapState::create_empty_map(dimensions)?)),
             map_size: dimensions,
             iterations,
-        })
+        };
+        state.generate_map()?;
+        Ok(state)
     }
 
-    pub fn regenerate_map(&mut self) -> Result<(), String> {
-        self.map = MapState::new(self.map_size, self.iterations)?.map;
+    pub fn generate_map(&mut self) -> Result<(), String> {
+        let mut map = self.map.write().map_err(|e| e.to_string())?;
+        *map = MapState::create_empty_map(self.map_size)?;
+
+        let local_self = self.map.clone();
+        let iterations = self.iterations;
+        let dimensions = self.map_size;
+
+        thread::spawn(move || MapState::generate(local_self, iterations, dimensions));
+
         Ok(())
+    }
+
+    fn generate(map: Arc<RwLock<Map>>, iterations: u16, dimensions: (u16, u16)) {
+        MapState::GENERATOR.populate(map.clone(), dimensions);
+        for _ in 0..iterations {
+            MapState::GENERATOR.smooth(map.clone(), dimensions);
+        }
     }
 }

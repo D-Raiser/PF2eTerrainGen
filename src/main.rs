@@ -12,15 +12,13 @@ const SCREEN_WIDTH: u32 = 1024;
 const SCREEN_HEIGHT: u32 = 720;
 const WINDOW_TITLE: &str = "PF2e Terrain Generator";
 // roughly earth sized: 2076
-const MAP_SIZE: (i16, i16) = (150, 150);
+const MAP_SIZE: (u16, u16) = (1500, 1500);
 const SMOOTHING_ITERATIONS: u16 = 0; //5;
 
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
 
-    // TODO: Generation in separate thread (with RWMutex) so that we can already render the partial map
-    //  and see updates
-    //  + Maybe intentionally slow down generation then to be able to see the steps properly
+    // TODO: Maybe add option to intentionally slow down generation to be able to see the steps more easily
 
     // TODO: Infinite Scrolling/Wrap-around effect (only in horizontal direction)
 

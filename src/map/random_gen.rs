@@ -1,10 +1,10 @@
-use crate::map::{Environment, Hex, Map, MapGenerator};
-use rand::Rng;
+use crate::map::{Environment, Map, MapGenerator};
+use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 
 use once_cell::sync::OnceCell;
-use rand::rngs::ThreadRng;
 use std::slice::Iter;
+use std::sync::{Arc, RwLock};
 
 pub struct RandomGenerator {}
 
@@ -19,23 +19,20 @@ struct RandomGeneratorHexType {
 }
 
 impl MapGenerator for RandomGenerator {
-    fn populate(&self, map: &mut Map) {
-        let mut rng = rand::thread_rng();
-        let max_x = map.tiles.len();
-        let max_y = map.tiles[0].len();
+    fn populate(&self, map: Arc<RwLock<Map>>, dimensions: (u16, u16)) {
+        let (max_x, max_y) = ((dimensions.0 - 1) as usize, (dimensions.1 - 1) as usize);
 
-        for (y, row) in map.tiles.iter_mut().enumerate() {
-            for (x, hex) in row.iter_mut().enumerate() {
-                *hex = RandomGenerator::generate_hex(&mut rng, x, y, max_x, max_y);
+        for y in 0..=max_y {
+            for x in 0..=max_x {
+                RandomGenerator::generate_hex(map.clone(), x, y, max_x, max_y)
             }
         }
     }
 
-    fn smooth(&self, map: &mut Map) {
+    fn smooth(&self, map: Arc<RwLock<Map>>, dimensions: (u16, u16)) {
         let mut rng = rand::thread_rng();
 
-        let max_y = map.tiles.len() - 1;
-        let max_x = map.tiles[0].len() - 1;
+        let (max_x, max_y) = ((dimensions.0 - 1) as usize, (dimensions.1 - 1) as usize);
 
         for y in 0..=max_y {
             for x in 0..=max_x {
@@ -45,12 +42,16 @@ impl MapGenerator for RandomGenerator {
                     continue;
                 } else if op < 55 {
                     // transform the hex
-                    map.tiles[y][x] = Hex {
-                        environment: RandomGenerator::transform_hex(
-                            map.tiles[y][x].environment,
-                            &mut rng,
-                        ),
-                    }
+                    RandomGenerator::set_hex(
+                        map.clone(),
+                        RandomGenerator::transform_hex(RandomGenerator::read_hex(
+                            map.clone(),
+                            x,
+                            y,
+                        )),
+                        x,
+                        y,
+                    );
                 } else {
                     // determine tile's type by averaging the surroundings
                     let y_above = if y > 0 { y - 1 } else { max_y };
@@ -59,14 +60,14 @@ impl MapGenerator for RandomGenerator {
                     let x_right = if x < max_x { x + 1 } else { 0 };
 
                     let surrounding_environments: [Environment; 8] = [
-                        map.tiles[y_above][x_left].environment,
-                        map.tiles[y_above][x].environment,
-                        map.tiles[y_above][x_right].environment,
-                        map.tiles[y][x_left].environment,
-                        map.tiles[y][x_right].environment,
-                        map.tiles[y_below][x_left].environment,
-                        map.tiles[y_below][x].environment,
-                        map.tiles[y_below][x_right].environment,
+                        RandomGenerator::read_hex(map.clone(), x_left, y_above),
+                        RandomGenerator::read_hex(map.clone(), x, y_above),
+                        RandomGenerator::read_hex(map.clone(), x_right, y_above),
+                        RandomGenerator::read_hex(map.clone(), x_left, y),
+                        RandomGenerator::read_hex(map.clone(), x_right, y),
+                        RandomGenerator::read_hex(map.clone(), x_left, y_below),
+                        RandomGenerator::read_hex(map.clone(), x, y_below),
+                        RandomGenerator::read_hex(map.clone(), x_right, y_below),
                     ];
 
                     let most_frequent_environment = surrounding_environments
@@ -79,9 +80,7 @@ impl MapGenerator for RandomGenerator {
                         .max_by_key(|(_, cnt)| *cnt)
                         .map(|(k, _)| k)
                         .unwrap();
-                    map.tiles[y][x] = Hex {
-                        environment: most_frequent_environment,
-                    }
+                    RandomGenerator::set_hex(map.clone(), most_frequent_environment, x, y);
                 }
             }
         }
@@ -89,16 +88,8 @@ impl MapGenerator for RandomGenerator {
 }
 
 impl RandomGenerator {
-    fn generate_hex(
-        rng: &mut ThreadRng,
-        _x: usize,
-        _y: usize,
-        _max_x: usize,
-        _max_y: usize,
-    ) -> Hex {
-        //let equator_dist = (max_y / 2).abs_diff(y);
-        //let pole_dist = min((0 as usize).abs_diff(y), max_y.abs_diff(y));
-        let n = rng.gen_range(0..RandomGeneratorHexType::summed_terrain_base_chance());
+    fn generate_hex(map: Arc<RwLock<Map>>, x: usize, y: usize, _max_x: usize, _max_y: usize) {
+        let n = thread_rng().gen_range(0..RandomGeneratorHexType::summed_terrain_base_chance());
         let (_, hex_type) = RandomGeneratorHexType::iterator().fold(
             (0, RandomGeneratorHexType::NONE),
             |(summed_percentage, hex_type), &t| {
@@ -110,18 +101,40 @@ impl RandomGenerator {
             },
         );
 
-        Hex {
-            environment: hex_type.environment,
-        }
+        RandomGenerator::set_hex(map.clone(), hex_type.environment, x, y);
     }
 
-    fn transform_hex(environment: Environment, rng: &mut ThreadRng) -> Environment {
+    fn set_hex(map: Arc<RwLock<Map>>, env: Environment, x: usize, y: usize) {
+        let mut map = match map.write() {
+            Ok(m) => m,
+            Err(e) => {
+                println!("failed to set hex: {e}");
+                return;
+            }
+        };
+
+        map.tiles[y][x].environment = env;
+    }
+
+    fn read_hex(map: Arc<RwLock<Map>>, x: usize, y: usize) -> Environment {
+        let map = match map.read() {
+            Ok(m) => m,
+            Err(e) => {
+                println!("Failed to read hex: {e}");
+                return Environment::NONE;
+            }
+        };
+
+        map.tiles[y][x].environment
+    }
+
+    fn transform_hex(environment: Environment) -> Environment {
         let total_chance = RandomGeneratorHexType::total_transform_chance(environment);
         if total_chance == 0 {
             return environment;
         }
 
-        let n = rng.gen_range(0..total_chance);
+        let n = thread_rng().gen_range(0..total_chance);
         let (_, ret) = RandomGeneratorHexType::iterator().fold(
             (0, RandomGeneratorHexType::NONE),
             |(summed_percentage, ret), &t| {

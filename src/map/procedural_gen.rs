@@ -2,55 +2,50 @@ use crate::map::environments::Environment;
 use crate::map::{Map, MapGenerator};
 use rand::Rng;
 use std::cmp::{max, min};
+use std::sync::{Arc, RwLock};
 
 pub struct ProceduralGenerator {}
 
 // TODO: doesn't feel much better than the random generator yet
 //  probably needs some smoothing for bigger clusters of the same environment
 impl MapGenerator for ProceduralGenerator {
-    fn populate(&self, map: &mut Map) {
-        let max_y = map.tiles.len() - 1;
-        let max_x = map.tiles[0].len() - 1;
-
-        println!("{max_x} {max_y}");
+    fn populate(&self, map: Arc<RwLock<Map>>, dimensions: (u16, u16)) {
+        let (max_x, max_y) = ((dimensions.0 - 1) as usize, (dimensions.1 - 1) as usize);
 
         for y in 0..=max_y {
             for x in 0..=max_x {
-                ProceduralGenerator::generate_hex(map, x, y, max_x, max_y)
+                ProceduralGenerator::generate_hex(map.clone(), x, y, max_x, max_y)
             }
         }
     }
 
-    fn smooth(&self, _map: &mut Map) {
+    fn smooth(&self, _map: Arc<RwLock<Map>>, _dimensions: (u16, u16)) {
         todo!() //TODO: Not sure yet if this needs to do anything
     }
 }
 
 impl ProceduralGenerator {
-    fn generate_hex(map: &mut Map, x: usize, y: usize, max_x: usize, max_y: usize) {
+    fn generate_hex(map: Arc<RwLock<Map>>, x: usize, y: usize, max_x: usize, max_y: usize) {
         let water_odds: u32 = if ProceduralGenerator::is_mostly_land(
-            ProceduralGenerator::surrounding_environments(map, x, y, max_x, max_y),
+            ProceduralGenerator::surrounding_environments(map.clone(), x, y, max_x, max_y),
         ) {
             4
         } else {
             7
         };
 
-        let polar_distance = min(y, (max_y - y));
+        let polar_distance = min(y, max_y - y);
         // only the top/bottom ~12% are covered in ice (so 24% total at most)
         let close_to_pole = polar_distance < (max_y / 7);
-        println!("{close_to_pole} + {water_odds}");
 
         if rand::thread_rng().gen_ratio(water_odds + if close_to_pole { 3 } else { 1 }, 10) {
-            println!("WATER");
             ProceduralGenerator::generate_water(map, x, y, max_y);
         } else {
-            println!("LAND");
             ProceduralGenerator::generate_land(map, x, y, max_x, max_y);
         }
     }
 
-    fn generate_water(map: &mut Map, x: usize, y: usize, max_y: usize) {
+    fn generate_water(map: Arc<RwLock<Map>>, x: usize, y: usize, max_y: usize) {
         let polar_distance = min(y as u32, (max_y - y) as u32);
         // only the top/bottom ~12% are covered in ice (so 24% total at most)
         let max_dist_for_ice = (max_y / 8) as u32;
@@ -78,7 +73,7 @@ impl ProceduralGenerator {
         return ProceduralGenerator::set_hex(map, Environment::ARCTIC, x, y);
     }
 
-    fn generate_land(map: &mut Map, x: usize, y: usize, max_x: usize, max_y: usize) {
+    fn generate_land(map: Arc<RwLock<Map>>, x: usize, y: usize, max_x: usize, max_y: usize) {
         let equatorial_distance = (max_y / 2).abs_diff(y) as u32;
 
         // only the middle ~25% can generate deserts
@@ -94,7 +89,8 @@ impl ProceduralGenerator {
             return ProceduralGenerator::set_hex(map, Environment::DESERT, x, y);
         }
 
-        let surroundings = ProceduralGenerator::surrounding_environments(map, x, y, max_x, max_y);
+        let surroundings =
+            ProceduralGenerator::surrounding_environments(map.clone(), x, y, max_x, max_y);
         let aerial_count = ProceduralGenerator::count_in_surroundings(
             &surroundings,
             &mut [Environment::AERIAL].iter(),
@@ -151,7 +147,15 @@ impl ProceduralGenerator {
         })
     }
 
-    fn set_hex(map: &mut Map, env: Environment, x: usize, y: usize) {
+    fn set_hex(map: Arc<RwLock<Map>>, env: Environment, x: usize, y: usize) {
+        let mut map = match map.write() {
+            Ok(m) => m,
+            Err(e) => {
+                println!("failed to set hex: {e}");
+                return;
+            }
+        };
+
         map.tiles[y][x].environment = env;
     }
 
@@ -170,19 +174,25 @@ impl ProceduralGenerator {
             &mut [Environment::NONE].iter(),
         );
         let size = surroundings.len() as u32;
-        println!("{:?}", surroundings);
         return (cnt) * 2 < (size - none_cnt);
     }
 
     // assumes that iterating over the map left->right first and top->bottom second
     fn surrounding_environments(
-        map: &mut Map,
+        map: Arc<RwLock<Map>>,
         x: usize,
         y: usize,
         max_x: usize,
         _max_y: usize,
     ) -> Vec<Environment> {
         let mut surrounding_environments: Vec<Environment> = vec![];
+        let map = match map.read() {
+            Ok(m) => m,
+            Err(e) => {
+                println!("Failed to determine surrounding envs: {e}");
+                return vec![];
+            }
+        };
 
         if y > 0 {
             surrounding_environments.push(map.tiles[y - 1][x].environment);

@@ -38,7 +38,7 @@ impl HexRenderer {
     }
 
     // returns the dimensions required to render a map of the provided size
-    pub fn get_bounds(&self, map_size: (i16, i16)) -> (u16, u16) {
+    pub fn get_bounds(&self, map_size: (u16, u16)) -> (u16, u16) {
         let (x, y) = map_size;
         // every second row is horizontally offset by half a tile
         let total_width = self.hex_width * (x as f32) + 0.5 * self.hex_width;
@@ -64,7 +64,8 @@ impl HexRenderer {
 
         for x in min_idx_x..=max_idx_x {
             for y in min_idx_y..=max_idx_y {
-                let hex = &map_state.map.tiles[y][x];
+                let map = map_state.map.read().map_err(|e| e.to_string())?;
+                let hex = map.tiles[y][x];
                 self.render_hex_indexed(
                     &canvas,
                     (x as i16, y as i16),
@@ -111,7 +112,7 @@ impl HexRenderer {
     // returns minimum and maximum index of tiles to be rendered
     fn get_index_range(
         &self,
-        map_size: (i16, i16),
+        map_size: (u16, u16),
         viewport_offset: (i16, i16),
         viewport_size: (u32, u32),
         skip_offscreen: bool,
