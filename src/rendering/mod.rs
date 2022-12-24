@@ -64,7 +64,7 @@ impl HexRenderer {
 
         for x in min_idx_x..=max_idx_x {
             for y in min_idx_y..=max_idx_y {
-                let hex = &map_state.map.tiles[x][y];
+                let hex = &map_state.map.tiles[y][x];
                 self.render_hex_indexed(
                     &canvas,
                     (x as i16, y as i16),

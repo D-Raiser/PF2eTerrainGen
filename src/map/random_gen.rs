@@ -19,32 +19,6 @@ struct RandomGeneratorHexType {
 }
 
 impl MapGenerator for RandomGenerator {
-    fn generate(&self, dimensions: (i16, i16), iterations: u16) -> Result<Map, String> {
-        let (width, height) = dimensions;
-        if height % 2 != 0 || width % 2 != 0 || height < 2 || width < 2 {
-            // With uneven numbers the map cannot be tiled infinitely without gaps
-            return Err(String::from("Map dimensions must be even positive numbers"));
-        }
-
-        let tiles: Vec<Vec<Hex>> = vec![
-            vec![
-                Hex {
-                    environment: Environment::NONE
-                };
-                width as usize
-            ];
-            height as usize
-        ];
-        let mut map = Map { tiles };
-
-        self.populate(&mut map);
-        for _ in 0..iterations {
-            self.smooth(&mut map);
-        }
-
-        Ok(map)
-    }
-
     fn populate(&self, map: &mut Map) {
         let mut rng = rand::thread_rng();
         let max_x = map.tiles.len();
@@ -161,6 +135,7 @@ impl RandomGenerator {
         ret.environment
     }
 }
+
 impl RandomGeneratorHexType {
     const NONE: RandomGeneratorHexType = RandomGeneratorHexType {
         environment: Environment::NONE,

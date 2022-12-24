@@ -8,26 +8,31 @@ use sdl2::render::WindowCanvas;
 use sdl2::EventPump;
 
 // TODO: Double check types (unsigned vs. signed & size)
-const SCREEN_WIDTH: u32 = 800;
-const SCREEN_HEIGHT: u32 = 600;
+const SCREEN_WIDTH: u32 = 1024;
+const SCREEN_HEIGHT: u32 = 720;
 const WINDOW_TITLE: &str = "PF2e Terrain Generator";
 // roughly earth sized: 2076
-const MAP_SIZE: (i16, i16) = (300, 300);
-const SMOOTHING_ITERATIONS: u16 = 5;
+const MAP_SIZE: (i16, i16) = (150, 150);
+const SMOOTHING_ITERATIONS: u16 = 0; //5;
 
 fn main() -> Result<(), String> {
     let (mut event_pump, mut canvas) = show_window()?;
 
-    // TODO: Zoom only until whole map is on screen at once
     // TODO: Generation in separate thread (with RWMutex) so that we can already render the partial map
     //  and see updates
     //  + Maybe intentionally slow down generation then to be able to see the steps properly
+
     // TODO: Infinite Scrolling/Wrap-around effect (only in horizontal direction)
+
+    // TODO: Zoom only until whole map is on screen at once
+    //  (would prevent "bug" of map "disappearing" when zooming where it actually just gets moved offscreen)
+
     // TODO: Zoom to MousePos
 
     // TODO: MAYBE Randomly generate elevation (highs/lows less likely?), smooth elevation & color depending on elevation
+
     let mut app_state = AppState {
-        map_state: MapState::new(MAP_SIZE.0, MAP_SIZE.0, SMOOTHING_ITERATIONS)?,
+        map_state: MapState::new((MAP_SIZE.0, MAP_SIZE.1), SMOOTHING_ITERATIONS)?,
         viewport_state: ViewPortState::new(),
     };
 

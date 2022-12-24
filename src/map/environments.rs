@@ -1,6 +1,6 @@
 use sdl2::pixels::Color;
 
-#[derive(Copy, Clone, Eq, Hash, PartialEq)]
+#[derive(Copy, Clone, Eq, Hash, PartialEq, Debug)]
 pub enum Environment {
     NONE,
     // Common Environments
